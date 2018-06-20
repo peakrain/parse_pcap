@@ -9,6 +9,7 @@
 #include<netinet/if_ether.h>
 #include<malloc.h>
 #include<string.h>
+char *time_format="%Y-%m-%d %H:%M:%S";
 information *info;
 char *format_time(char *format,time_t time);
 int is_frag(int frag)
@@ -17,6 +18,7 @@ int is_frag(int frag)
 	for(i=0;i<6;i++)
 		frag=frag/2;
 	flag=frag%2;
+	frag=flag==1||frag==0;
 	return flag;
 }
 void parse_eth(const u_char *packet,int len)
@@ -74,32 +76,72 @@ void parse_udp(const u_char *packet,int offset,int len)
 	info->src_port=ntohs(udp_h->source);
 	info->dst_port=ntohs(udp_h->dest);
 }
+int is_http(char *data)
+{
+	char str[1024];
+	sscanf(data,"%s",str);
+	if(strncmp(str,"GET",3)==0||
+	   strncmp(str,"POST",4)==0||
+	   strncmp(str,"HTTP",4)==0)
+			return 1;
+	else
+		return 0;
+	
+}
+void print_0x(const u_char *data,int len)
+{
+	int i;
+	for(i=0;i<len;i++)
+	{
+		if(i%16==0)
+			printf("%d: ",i/16);
+		printf("%02x ",data[i]);
+		if((i+1)%8==0)
+			printf(" ");
+		if((i+1)%16==0)
+			printf("\n");
+	}
+	printf("\n");
+}
 void parse_http(const u_char *packet,int offset,int len)
 {
-	print_info();
-	/*char *data=(char *)(packet+offset);
-	int length=len-offset;
-	int i;
-	for(i=0;i<length;i++)
-		printf("%c",data[i]);
-	printf("\n");*/
+	printf("offset:%d len:%d packetlen:%d\n",offset,len,strlen(packet));
+	char *data=(char *)(packet+offset);
+//	if(is_http(data))
+	{
+		printf("offset:%d len:%d datalen:%d\n",offset,len,strlen(data));
+		print();
+		print_0x(packet,len);
+		//http_analysis(data);
+		/*int length=len-offset;
+		int i;
+		for(i=0;i<length;i++)
+		{
+			printf("%c",data[i]);
+			if((i+1)%16==0);
+			//	printf("\n");
+		}
+		printf("\n");*/
+	}
 }
-void print_info()
+void print()
 {
 	int i;
-	printf("Src_Mac: ");
+	/*printf("Src_Mac: ");
 	for(i=0;i<ETH_ALEN-1;i++)
 		printf("%0x:",info->src_mac[i]);
 	printf("%0x ",info->src_mac[ETH_ALEN-1]);
 	printf("Dst_Mac: ");
 	for(i=0;i<ETH_ALEN-1;i++)
 		printf("%0x:",info->dst_mac[i]);
-	printf("%0x ",info->dst_mac[ETH_ALEN-1]);
+	printf("%0x ",info->dst_mac[ETH_ALEN-1]);**/
 	printf("Src_IP: %s ",info->src_ip);
-	printf("Dst_IP: %s ",info->dst_ip);
+	printf("Dst_IP: %s \n",info->dst_ip);
 	printf("Src_Port: %d ",info->src_port);
 	printf("Dst_Port: %d ",info->dst_port);
-	printf("Protocol: %d\n",info->protocol);
+	printf("Protocol: %d ",info->protocol);
+	printf("Frag: %d ",info->frag);
+	printf("Length: %d\n",info->len);
 	printf("Rev_Time: %s\n",info->rev_time);	
 	
 }
@@ -107,12 +149,13 @@ void call_back(u_char *user,const struct pcap_pkthdr *pkthdr,const u_char *packe
 {
 	int *id=(int *)user;
 	int offset=0;
-	printf("%d:",++(*id));
+	printf("%d:len:%d caplen:%d\n",++(*id),pkthdr->len,pkthdr->caplen);
 	//analysis pcap_header
 	info->len=pkthdr->len;
 	char *time=format_time(time_format,(time_t)pkthdr->ts.tv_sec);
 	strcpy(info->rev_time,time);
 	parse_eth(packet,pkthdr->len);
+	
 }
 char *format_time(char *format,time_t time)
 {	
@@ -142,15 +185,4 @@ void analysis(int num,char *buf,char *filename)
 	pcap_loop(device,num,call_back,(u_char*)&i);
 	pcap_close(device);
 	
-}
-int main(int argc,char *argv[])
-{
-	if(argc!=2)
-	{
-		printf("syntax error!\n");
-		return;
-	}
-	char *filename=argv[1];
-	analysis(-1,"tcp",filename);
-	return 0;
 }
